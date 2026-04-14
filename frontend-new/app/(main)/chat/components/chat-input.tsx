@@ -166,6 +166,10 @@ export function ChatInput({
     name: collectionNamesCache[id] || 'Collection',
   }));
 
+  // Pending record attached from file preview (shown as a file card, not a folder card)
+  const pendingRecord = useChatStore((s) => s.pendingRecord);
+  const setPendingRecord = useChatStore((s) => s.setPendingRecord);
+
   const handleRemoveCollection = useCallback((id: string) => {
     setFilters({
       ...settings.filters,
@@ -495,8 +499,71 @@ export function ChatInput({
         }),
       }}
     >
-      {/* Selected Collection Cards — shown above the main input, matching Figma spec */}
-      {selectedCollections.length > 0 && !isCollectionsPanelOpen && !isModePanelOpen && (
+      {/* Pending Record (file attachment from file preview → chat) — file-style card */}
+      {pendingRecord && !isCollectionsPanelOpen && !isModePanelOpen && (
+        <Flex
+          align="center"
+          style={{
+            backgroundColor: 'var(--slate-1)',
+            borderTop: '1px solid var(--slate-5)',
+            borderLeft: '1px solid var(--slate-5)',
+            borderRight: '1px solid var(--slate-5)',
+            borderTopLeftRadius: 'var(--radius-1)',
+            borderTopRightRadius: 'var(--radius-1)',
+            padding: 'var(--space-3) var(--space-4)',
+          }}
+        >
+          <Box
+            style={{
+              flexShrink: 0,
+              width: '196px',
+              padding: 'var(--space-2)',
+              backgroundColor: 'var(--olive-a2)',
+              border: '1px solid var(--olive-3)',
+              borderRadius: '3px',
+            }}
+          >
+            <Flex direction="column" gap="2">
+              <Flex align="center" justify="between">
+                <FileIcon
+                  filename={pendingRecord.name}
+                  size={16}
+                  fallbackIcon="insert_drive_file"
+                />
+                <IconButton
+                  variant="ghost"
+                  size="1"
+                  onClick={() => {
+                    setPendingRecord(null);
+                    // Also clear the kb filter so the query isn't scoped
+                    setFilters({ ...settings.filters, kb: [] });
+                  }}
+                  style={{ margin: 0, flexShrink: 0 }}
+                >
+                  <MaterialIcon name="close" size={ICON_SIZES.SECONDARY} color="var(--slate-11)" />
+                </IconButton>
+              </Flex>
+              <Flex direction="column" gap="1" style={{ minWidth: 0 }}>
+                <Text
+                  size="1"
+                  weight="medium"
+                  style={{
+                    color: 'var(--slate-12)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {pendingRecord.name}
+                </Text>
+              </Flex>
+            </Flex>
+          </Box>
+        </Flex>
+      )}
+
+      {/* Selected Collection Cards — shown above the main input when no pending record */}
+      {!pendingRecord && selectedCollections.length > 0 && !isCollectionsPanelOpen && !isModePanelOpen && (
         <Flex
           align="center"
           style={{
@@ -523,15 +590,15 @@ export function ChatInput({
           align="center"
           style={{
             backgroundColor: 'var(--slate-1)',
-            borderTop: selectedCollections.length > 0 && !isCollectionsPanelOpen && !isModePanelOpen
+            borderTop: (pendingRecord || (selectedCollections.length > 0 && !pendingRecord)) && !isCollectionsPanelOpen && !isModePanelOpen
               ? 'none'
               : '1px solid var(--slate-5)',
             borderLeft: '1px solid var(--slate-5)',
             borderRight: '1px solid var(--slate-5)',
-            borderTopLeftRadius: selectedCollections.length > 0 && !isCollectionsPanelOpen && !isModePanelOpen
+            borderTopLeftRadius: (pendingRecord || (selectedCollections.length > 0 && !pendingRecord)) && !isCollectionsPanelOpen && !isModePanelOpen
               ? '0'
               : 'var(--radius-1)',
-            borderTopRightRadius: selectedCollections.length > 0 && !isCollectionsPanelOpen && !isModePanelOpen
+            borderTopRightRadius: (pendingRecord || (selectedCollections.length > 0 && !pendingRecord)) && !isCollectionsPanelOpen && !isModePanelOpen
               ? '0'
               : 'var(--radius-1)',
             padding: 'var(--space-3) var(--space-4)',
@@ -654,7 +721,7 @@ export function ChatInput({
         border: (message.trim() || isEditMode || isListening) ? '1px solid var(--accent-11)' : '1px solid var(--slate-3)',
         // Flatten top corners whenever there is an element directly above (collections bar,
         // uploaded files preview, or the action pill bar) to avoid a double-radius gap.
-        borderRadius: (selectedCollections.length > 0 && !isCollectionsPanelOpen && !isModePanelOpen) || uploadedFiles.length > 0 || isActionMode
+        borderRadius: (pendingRecord && !isCollectionsPanelOpen && !isModePanelOpen) || (selectedCollections.length > 0 && !isCollectionsPanelOpen && !isModePanelOpen) || uploadedFiles.length > 0 || isActionMode
           ? '0 0 var(--radius-2) var(--radius-2)'
           : 'var(--radius-2)',
         padding: 'var(--space-3) var(--space-4)',

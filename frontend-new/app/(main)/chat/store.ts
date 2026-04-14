@@ -149,6 +149,10 @@ interface ChatState {
   // ── Cache ──
   collectionNamesCache: Record<string, string>;
 
+  // ── Pending record (set when navigating from file preview → chat) ──
+  /** File-level attachment shown above the chat input until the first message is sent */
+  pendingRecord: { id: string; name: string; mimeType: string } | null;
+
   // ── Search state ──
   searchResults: SearchResultItem[];
   searchQuery: string;
@@ -243,6 +247,9 @@ interface ChatState {
   // ── Cache actions ──
   setCollectionNamesCache: (cache: Record<string, string>) => void;
 
+  // ── Pending record actions ──
+  setPendingRecord: (record: { id: string; name: string; mimeType: string } | null) => void;
+
   // ── Global reset ──
   reset: () => void;
 }
@@ -298,6 +305,8 @@ const initialState = {
   searchId: null as string | null,
   isSearching: false,
   searchError: null as string | null,
+
+  pendingRecord: null as { id: string; name: string; mimeType: string } | null,
 };
 
 // ── Store creation ──────────────────────────────────────────────────
@@ -703,6 +712,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       collectionNamesCache: { ...state.collectionNamesCache, ...cache },
     })),
+
+  setPendingRecord: (record) => set({ pendingRecord: record }),
 
   // ── Reset ────────────────────────────────────────────────────────
 

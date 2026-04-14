@@ -534,13 +534,12 @@ function ChatContent() {
   };
 
   // ── Consume pending chat context from widget ──────────────────────
-  const pendingConsumedRef = useRef(false);
   useEffect(() => {
-    if (conversationId || pendingConsumedRef.current) return;
+    if (conversationId) return;
 
     const pending = usePendingChatStore.getState().consumePending();
+    console.log('[chat/page] consumePending check — conversationId:', conversationId, 'pending:', pending);
     if (!pending) return;
-    pendingConsumedRef.current = true;
 
     const store = useChatStore.getState();
 
@@ -559,6 +558,7 @@ function ChatContent() {
 
     // 1. Set collection filters so they scope the AI query
     const collections = pending.pageContext.collections ?? [];
+    console.log('[chat/page] consumePending — collections:', collections, 'selectedRecordIds:', pending.pageContext.selectedRecordIds, 'sourceLabel:', pending.pageContext.sourceLabel);
     if (collections.length > 0) {
       const kbIds = collections.map((c) => c.id);
       store.setFilters({ ...store.settings.filters, kb: kbIds });
@@ -575,6 +575,18 @@ function ChatContent() {
       });
     }
 
+    // 1b. If a specific record was attached (e.g. from file preview), store it
+    //     so the chat input can render a file card instead of a folder card.
+    const recordIds = pending.pageContext.selectedRecordIds ?? [];
+    if (recordIds.length > 0 && pending.pageContext.sourceLabel) {
+      store.setPendingRecord({
+        id: recordIds[0],
+        name: pending.pageContext.sourceLabel,
+        mimeType: '',
+      });
+      console.log('[chat/page] pendingRecord set:', { id: recordIds[0], name: pending.pageContext.sourceLabel });
+    }
+
     // 2. Apply any settings overrides from the widget
     if (pending.settings) {
       if (pending.settings.mode) store.setMode(pending.settings.mode);
@@ -582,21 +594,23 @@ function ChatContent() {
       if (pending.settings.agentStrategy) store.setAgentStrategy(pending.settings.agentStrategy);
     }
 
-    // 3. Auto-send the message through the runtime
-    threadRuntime.append({
-      role: 'user',
-      content: [{ type: 'text', text: pending.message }],
-      metadata: {
-        custom: {
-          collections: collections.length > 0 ? collections : undefined,
+    // 3. Auto-send the message through the runtime (skip if message is empty)
+    if (pending.message.trim()) {
+      threadRuntime.append({
+        role: 'user',
+        content: [{ type: 'text', text: pending.message }],
+        metadata: {
+          custom: {
+            collections: collections.length > 0 ? collections : undefined,
+          },
         },
-      },
-      startRun: true,
-    });
+        startRun: true,
+      });
 
-    // 4. Clear KB filters after send
-    if (collections.length > 0) {
-      store.setFilters({ ...store.settings.filters, kb: [] });
+      // 4. Clear KB filters after send
+      if (collections.length > 0) {
+        store.setFilters({ ...store.settings.filters, kb: [] });
+      }
     }
   }, [conversationId, threadRuntime, activeSlotId, agentId]);
 

@@ -131,6 +131,11 @@ export function ChatInputWrapper() {
     if (collectionsAtSendTime.length > 0) {
       setFilters({ ...settings.filters, kb: [] });
     }
+
+    // Clear pending record attachment (from file preview → chat flow)
+    if (store.pendingRecord) {
+      store.setPendingRecord(null);
+    }
   };
 
   return <ChatInput onSend={handleSend} />;

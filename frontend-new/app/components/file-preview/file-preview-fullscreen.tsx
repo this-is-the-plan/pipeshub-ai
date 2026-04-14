@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Box, Flex, Text, IconButton } from '@radix-ui/themes';
 import { MaterialIcon } from '@/app/components/ui/MaterialIcon';
 import { FileIcon } from '@/app/components/ui/file-icon';
+import { usePendingChatStore } from '@/lib/store/pending-chat-store';
 
 import { ICON_SIZES } from '@/lib/constants/icon-sizes';
 import { FilePreviewRenderer } from './renderers/file-preview-renderer';
@@ -18,12 +20,13 @@ export function FilePreviewFullscreen({
   defaultTab: _defaultTab = 'preview',
   onClose,
   isLoading = false,
-  recordDetails: _recordDetails,
+  recordDetails,
   initialPage,
   highlightBox,
   citations,
 }: FilePreviewProps) {
   const hasCitations = citations && citations.length > 0;
+  const router = useRouter();
   const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
   const [totalPages, setTotalPages] = useState<number | null>(null);
 
@@ -59,6 +62,30 @@ export function FilePreviewFullscreen({
 
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
+  };
+
+  const handleChatClick = () => {
+    console.log('[FilePreviewFullscreen] handleChatClick — file:', file.id, file.name, '| recordDetails:', recordDetails);
+
+    onClose?.();
+
+    const collections: Array<{ id: string; name: string }> = [];
+    if (recordDetails?.knowledgeBase) {
+      collections.push({ id: recordDetails.knowledgeBase.id, name: recordDetails.knowledgeBase.name });
+    }
+
+    console.log('[FilePreviewFullscreen] setting pending — collections:', collections, 'recordId:', file.id);
+
+    usePendingChatStore.getState().setPending({
+      message: '',
+      pageContext: {
+        collections: collections.length > 0 ? collections : undefined,
+        selectedRecordIds: [file.id],
+        sourceLabel: file.name,
+      },
+      referrerPage: window.location.pathname,
+    });
+    router.push('/chat');
   };
 
   // Bidirectional citation ↔ page sync
@@ -229,6 +256,59 @@ export function FilePreviewFullscreen({
               >
                 <MaterialIcon name="chevron_right" size={ICON_SIZES.SECONDARY} />
               </IconButton>
+
+              <Box
+                style={{
+                  backgroundColor: 'var(--accent-3)',
+                  borderRadius: 'var(--radius-2)',
+                  padding: '8px 12px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                }}
+                onClick={handleChatClick}
+              >
+                <MaterialIcon name="chat" size={ICON_SIZES.SECONDARY} color="var(--accent-11)" />
+                <Text size="2" weight="medium" style={{ color: 'var(--accent-11)' }}>
+                  Chat
+                </Text>
+              </Box>
+            </Flex>
+          )}
+
+          {/* Floating Chat Button - for non-paginated files (centered) */}
+          {!paginationVisibility.shouldShow && (
+            <Flex
+              align="center"
+              justify="center"
+              style={{
+                position: 'absolute',
+                bottom: 'var(--space-6)',
+                left: '50%',
+                transform: 'translateX(-50%)',
+                boxShadow: '0px 20px 28px 0px rgba(0, 0, 0, 0.15)',
+              }}
+            >
+              <Box
+                style={{
+                  backgroundColor: 'var(--accent-3)',
+                  borderRadius: 'var(--radius-2)',
+                  padding: '8px 12px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  cursor: 'pointer',
+                }}
+                onClick={handleChatClick}
+              >
+                <MaterialIcon name="chat" size={ICON_SIZES.SECONDARY} color="var(--accent-11)" />
+                <Text size="2" weight="medium" style={{ color: 'var(--accent-11)' }}>
+                  Chat
+                </Text>
+              </Box>
             </Flex>
           )}
         </Box>

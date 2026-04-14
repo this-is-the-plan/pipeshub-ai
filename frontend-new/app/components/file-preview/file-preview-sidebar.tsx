@@ -1,7 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { Box, Flex, Text, IconButton, Dialog, VisuallyHidden } from '@radix-ui/themes';
+import { usePendingChatStore } from '@/lib/store/pending-chat-store';
 import { MaterialIcon } from '@/app/components/ui/MaterialIcon';
 import { FileIcon } from '@/app/components/ui/file-icon';
 import { LottieLoader } from '@/app/components/ui/lottie-loader';
@@ -30,6 +32,7 @@ export function FilePreviewSidebar({
   citations,
 }: FilePreviewProps) {
   const isMobile = useIsMobile();
+  const router = useRouter();
   const hasCitations = citations && citations.length > 0;
   const [activeTab, setActiveTab] = useState<FilePreviewTab>(defaultTab);
   const [currentPage, setCurrentPage] = useState(initialPage ?? 1);
@@ -57,8 +60,27 @@ export function FilePreviewSidebar({
   }, []);
 
   const handleChatClick = () => {
-    // TODO: Implement chat functionality
-    console.log('Chat button clicked');
+    console.log('[FilePreviewSidebar] handleChatClick — file:', file.id, file.name, '| recordDetails:', recordDetails);
+
+    onOpenChange?.(false);
+
+    const collections: Array<{ id: string; name: string }> = [];
+    if (recordDetails?.knowledgeBase) {
+      collections.push({ id: recordDetails.knowledgeBase.id, name: recordDetails.knowledgeBase.name });
+    }
+
+    console.log('[FilePreviewSidebar] setting pending — collections:', collections, 'recordId:', file.id);
+
+    usePendingChatStore.getState().setPending({
+      message: '',
+      pageContext: {
+        collections: collections.length > 0 ? collections : undefined,
+        selectedRecordIds: [file.id],
+        sourceLabel: file.name,
+      },
+      referrerPage: window.location.pathname,
+    });
+    router.push('/chat');
   };
 
   const handleTabChange = (tab: FilePreviewTab) => {
@@ -290,6 +312,8 @@ export function FilePreviewSidebar({
                     border: '1px solid var(--slate-3)',
                     borderRadius: 'var(--radius-1)',
                     boxShadow: '0px 20px 28px 0px rgba(0, 0, 0, 0.15)',
+                    zIndex: 10,
+                    pointerEvents: 'auto',
                   }}
                 >
                   <IconButton
@@ -337,7 +361,43 @@ export function FilePreviewSidebar({
 
                   <Box
                     style={{
-                      backgroundColor: 'var(--accent-a3)',
+                      backgroundColor: 'var(--accent-3)',
+                      borderRadius: 'var(--radius-2)',
+                      padding: '8px 12px',
+                      height: '32px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      cursor: 'pointer',
+                    }}
+                    onClick={handleChatClick}
+                  >
+                    <MaterialIcon name="chat" size={ICON_SIZES.SECONDARY} color="var(--accent-11)" />
+                    <Text size="2" weight="medium" style={{ color: 'var(--accent-11)' }}>
+                      Chat
+                    </Text>
+                  </Box>
+                </Flex>
+              )}
+
+              {/* Floating Chat Button - for non-paginated files (centered) */}
+              {activeTab === 'preview' && !paginationVisibility.shouldShow && (
+                <Flex
+                  align="center"
+                  justify="center"
+                  style={{
+                    position: 'absolute',
+                    bottom: 'var(--space-4)',
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    boxShadow: '0px 20px 28px 0px rgba(0, 0, 0, 0.15)',
+                    zIndex: 10,
+                    pointerEvents: 'auto',
+                  }}
+                >
+                  <Box
+                    style={{
+                      backgroundColor: 'var(--accent-3)',
                       borderRadius: 'var(--radius-2)',
                       padding: '8px 12px',
                       height: '32px',
