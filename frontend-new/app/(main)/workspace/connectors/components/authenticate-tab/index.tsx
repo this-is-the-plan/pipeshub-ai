@@ -119,8 +119,8 @@ function AuthenticateTabInner({
     if (isCreateMode || !isOAuthType(selectedAuthType) || oauthPopulatedRef.current) return;
     if (oauthFieldNames.length === 0) return;
 
-    // Get oauthConfigId from the connector config
-    const configAuth = connectorConfig?.config?.auth;
+    // Get oauthConfigId from the connector config (dynamic field not in type)
+    const configAuth = connectorConfig?.config?.auth as Record<string, unknown> | undefined;
     const oauthConfigId = configAuth?.oauthConfigId as string | undefined;
     if (!oauthConfigId || !panelConnector.type) return;
 
