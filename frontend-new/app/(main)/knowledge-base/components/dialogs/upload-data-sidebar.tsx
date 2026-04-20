@@ -2,25 +2,45 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { Flex, Box, Text, Button, IconButton, Dialog, VisuallyHidden } from '@radix-ui/themes';
+import { LoadingButton } from '@/app/components/ui/loading-button';
 import { MaterialIcon } from '@/app/components/ui/MaterialIcon';
 import { FileIcon } from '@/app/components/ui/file-icon';
 
 // Supported file types
-const SUPPORTED_FILE_TYPES = ['TXT', 'PDF', 'DOCX', 'PNG', 'JPEG', 'JPG', 'XLS', 'XLSX', 'HTML', 'PPT', 'PPTX'];
+const SUPPORTED_FILE_TYPES = ['TXT', 'PDF', 'DOC', 'DOCX', 'PNG', 'JPEG', 'JPG', 'SVG', 'XLS', 'XLSX', 'CSV', 'HTML', 'PPT', 'PPTX', 'MD', 'MDX'];
 const SUPPORTED_MIME_TYPES = [
   'text/plain',
   'application/pdf',
+  'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'image/png',
   'image/jpeg',
+  'image/svg+xml',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'text/csv',
+  'application/csv',
   'text/html',
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/markdown',
+  'text/x-markdown',
+  'application/x-markdown',
+  'text/mdx',
+];
+// Extensions used as a fallback when the browser doesn't report a MIME type
+// (e.g. some OSes send CSV/SVG/Markdown files with an empty or generic `type`).
+const SUPPORTED_EXTENSIONS = [
+  'txt', 'pdf', 'doc', 'docx', 'png', 'jpeg', 'jpg', 'svg', 'xls', 'xlsx', 'csv', 'html', 'htm', 'ppt', 'pptx', 'md', 'markdown', 'mdx',
 ];
 const MAX_FILE_SIZE_MB = 30;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
+function isSupportedFile(file: File): boolean {
+  if (SUPPORTED_MIME_TYPES.includes(file.type)) return true;
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  return SUPPORTED_EXTENSIONS.includes(ext);
+}
 
 // File with relative path for folder uploads
 export interface FileWithPath {
@@ -68,7 +88,7 @@ function DropZone({ type, onDrop, isEmpty }: DropZoneProps) {
 
       if (type === 'file') {
         fileArray.forEach((file) => {
-          if (file.size <= MAX_FILE_SIZE_BYTES && SUPPORTED_MIME_TYPES.includes(file.type)) {
+          if (file.size <= MAX_FILE_SIZE_BYTES && isSupportedFile(file)) {
             items.push({
               id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               name: file.name,
@@ -214,7 +234,15 @@ function DropZone({ type, onDrop, isEmpty }: DropZoneProps) {
   const inputProps =
     type === 'folder'
       ? { webkitdirectory: '', directory: '', multiple: true }
-      : { multiple: true, accept: SUPPORTED_MIME_TYPES.join(',') };
+      : {
+          multiple: true,
+          // Include both MIME types and extensions so browsers that can't
+          // resolve a CSV MIME still allow the file via extension match.
+          accept: [
+            ...SUPPORTED_MIME_TYPES,
+            ...SUPPORTED_EXTENSIONS.map((e) => `.${e}`),
+          ].join(','),
+        };
 
   return (
      <Flex
@@ -620,18 +648,19 @@ export function UploadDataSidebar({
           >
             Cancel
           </Button>
-          <Button
-            variant="solid" 
+          <LoadingButton
+            variant="solid"
             size="2"
             style={{
-              cursor: 'pointer', 
               backgroundColor: (!hasItems || isSaving) ? 'var(--slate-a3)' : 'var(--emerald-10)'
-            }} 
-            disabled={!hasItems || isSaving}
+            }}
+            disabled={!hasItems}
+            loading={isSaving}
+            loadingLabel="Saving..."
             onClick={handleSave}
           >
-            {isSaving ? 'Saving...' : 'Save'}
-          </Button>
+            Save
+          </LoadingButton>
         </Flex>
       </Dialog.Content>
     </Dialog.Root>

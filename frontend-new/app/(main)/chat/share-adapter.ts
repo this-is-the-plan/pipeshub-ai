@@ -4,6 +4,7 @@ import type { User } from '@/app/(main)/workspace/users/types';
 import type { ShareAdapter, SharedMember, ShareSubmission, ShareUser } from '@/app/components/share/types';
 import { useAuthStore } from '@/lib/store/auth-store';
 import { AgentsApi } from '@/app/(main)/agents/api';
+import { TeamsApi } from '@/app/(main)/workspace/teams/api';
 import type { SharedWithEntry } from './types';
 
 export interface CreateChatShareAdapterOptions {
@@ -31,7 +32,7 @@ export function createChatShareAdapter(
     entityId: conversationId,
     sidebarTitle: 'Share Chat',
     supportsRoles: false,
-    supportsTeams: false,
+    supportsTeams: true,
 
     async getSharedMembers(): Promise<SharedMember[]> {
       let conversation: {
@@ -52,15 +53,19 @@ export function createChatShareAdapter(
 
       if (sharedWithMongoIds.length === 0 && !ownerId) return [];
 
-      // Enrich with user details via fetchMergedUsers (keyed by MongoDB userId)
-      let allUsers: User[] = [];
+      // Enrich with user details via batch-by-ids lookup (keyed by MongoDB userId).
+      // This avoids the page-1-only cap from fetchMergedUsers when the conversation
+      // is shared with users who don't appear in the first page of the org.
+      const idsToLookup = Array.from(
+        new Set([...sharedWithMongoIds, ...(ownerId ? [ownerId] : [])])
+      );
+      let enrichedUsers: User[] = [];
       try {
-        const result = await UsersApi.fetchMergedUsers();
-        allUsers = result.users;
+        enrichedUsers = await UsersApi.getUsersByIds(idsToLookup);
       } catch {
         // Fallback: show IDs only
       }
-      const userMap = new Map<string, User>(allUsers.map((u) => [u.userId, u]));
+      const userMap = new Map<string, User>(enrichedUsers.map((u) => [u.userId, u]));
 
       // Build accessLevel lookup from sharedWith entries
       const accessMap = new Map(sharedWithEntries.map((entry: SharedWithEntry) => [entry.userId, entry.accessLevel]));
@@ -102,9 +107,27 @@ export function createChatShareAdapter(
     },
 
     async share(submission: ShareSubmission): Promise<void> {
-      await apiClient.post(`${conversationBasePath}/share`, {
-        userIds: submission.userIds,
-      });
+      const userIds = [...submission.userIds];
+
+      // Expand team selections into individual MongoDB user IDs
+      if (submission.teamIds && submission.teamIds.length > 0) {
+        const teamMemberResults = await Promise.allSettled(
+          submission.teamIds.map((teamId) =>
+            TeamsApi.getTeamUsers(teamId, { limit: 500 })
+          )
+        );
+        for (const result of teamMemberResults) {
+          if (result.status === 'fulfilled') {
+            for (const member of result.value.members) {
+              if (member.userId && !userIds.includes(member.userId)) {
+                userIds.push(member.userId);
+              }
+            }
+          }
+        }
+      }
+
+      await apiClient.post(`${conversationBasePath}/share`, { userIds });
     },
 
     async removeMember(memberId: string): Promise<void> {
@@ -114,24 +137,36 @@ export function createChatShareAdapter(
     },
 
     /**
-     * Returns users with MongoDB ObjectIDs as id — required by the chat
-     * /share endpoint. Overrides ShareCommonApi.getAllUsers() in the sidebar.
+     * Returns paginated users with MongoDB ObjectIDs as id — required by the chat
+     * /share endpoint. Enables infinite scroll in the share sidebar.
+     *
+     * Uses listGraphUsers (GET /api/v1/users/graph/list), which returns both the
+     * graph UUID (u.id) and the MongoDB ObjectId (u.userId). We expose MongoDB
+     * as `id` for /share, and the graph UUID as `uuid` for team creation. The
+     * plain /api/v1/users endpoint can't be used here: it sets both id and userId
+     * to the MongoDB _id, leaving team creation with no valid UUID to submit.
      */
-    async getSharingUsers(): Promise<ShareUser[]> {
-      let allUsers: User[] = [];
-      try {
-        const result = await UsersApi.fetchMergedUsers();
-        allUsers = result.users;
-      } catch {
-        // Fallback: empty list
-      }
-      return allUsers.map((u) => ({
-        id: u.userId,   // MongoDB ObjectID — what /share expects
-        name: u.name ?? u.email ?? '',
-        email: u.email,
-        avatarUrl: undefined,
-        isInOrg: true,
-      }));
+    async getSharingUsersPaginated(params: {
+      page: number;
+      limit: number;
+      search?: string;
+    }): Promise<{ users: ShareUser[]; totalCount: number }> {
+      const result = await UsersApi.listGraphUsers({
+        page: params.page,
+        limit: params.limit,
+        search: params.search,
+      });
+      return {
+        users: result.users.map((u) => ({
+          id: u.userId,   // MongoDB ObjectID — what /share expects
+          uuid: u.id,     // Graph UUID — required by team creation
+          name: u.name ?? u.email ?? '',
+          email: u.email,
+          avatarUrl: undefined,
+          isInOrg: true,
+        })),
+        totalCount: result.totalCount,
+      };
     },
 
     // No updateRole — supportsRoles is false
