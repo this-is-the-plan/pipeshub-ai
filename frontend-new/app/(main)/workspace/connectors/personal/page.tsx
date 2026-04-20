@@ -56,6 +56,7 @@ function PersonalConnectorsPageContent() {
     setIsLoading,
     setError,
     openPanel,
+    setSelectedScope,
     setInstances,
     setIsLoadingInstances,
     setConnectorTypeInfo,
@@ -176,9 +177,10 @@ function PersonalConnectorsPageContent() {
     (connector: Connector) => {
       // Always open in create mode (no _key) — the "+" and "Setup" buttons
       // should always initiate a new connector instance.
+      setSelectedScope('personal');
       openPanel(connector);
     },
-    [openPanel]
+    [openPanel, setSelectedScope]
   );
 
   const handleCardClick = useCallback(
