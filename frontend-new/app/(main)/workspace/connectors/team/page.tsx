@@ -57,6 +57,7 @@ function TeamConnectorsPageContent() {
     setIsLoading,
     setError,
     openPanel,
+    setSelectedScope,
     setInstances,
     setIsLoadingInstances,
     setConnectorTypeInfo,
@@ -178,9 +179,10 @@ function TeamConnectorsPageContent() {
     (connector: Connector) => {
       // Always open in create mode (no _key) — the "+" and "Setup" buttons
       // should always initiate a new connector instance.
+      setSelectedScope('team');
       openPanel(connector);
     },
-    [openPanel]
+    [openPanel, setSelectedScope]
   );
 
   const handleCardClick = useCallback(
