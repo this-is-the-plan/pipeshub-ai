@@ -174,8 +174,9 @@ function PersonalConnectorsPageContent() {
   // ── Handlers (list view) ───────────────────────────────────
   const handleSetup = useCallback(
     (connector: Connector) => {
-      const connectorId = connector._key;
-      openPanel(connector, connectorId);
+      // Always open in create mode (no _key) — the "+" and "Setup" buttons
+      // should always initiate a new connector instance.
+      openPanel(connector);
     },
     [openPanel]
   );

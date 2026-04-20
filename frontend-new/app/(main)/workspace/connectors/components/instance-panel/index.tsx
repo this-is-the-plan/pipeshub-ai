@@ -6,6 +6,8 @@ import { MaterialIcon } from '@/app/components/ui/MaterialIcon';
 import { getConnectorIconPath } from '@/lib/utils/connector-icon-utils';
 import { WorkspaceRightPanel } from '@/app/(main)/workspace/components/workspace-right-panel';
 import { useConnectorsStore } from '../../store';
+import { ConnectorsApi } from '../../api';
+import { useToastStore } from '@/lib/store/toast-store';
 import { OverviewTab } from './overview-tab';
 import { SettingsTab } from './settings-tab';
 import type { InstancePanelTab } from '../../types';
@@ -26,8 +28,10 @@ export function InstanceManagementPanel() {
     setInstancePanelTab,
     openPanel,
     openInstancePanel,
+    setActiveConnectors,
   } = useConnectorsStore();
 
+  const addToast = useToastStore((s) => s.addToast);
   const [iconError, setIconError] = useState(false);
   const [triggerHovered, setTriggerHovered] = useState(false);
 
@@ -37,6 +41,52 @@ export function InstanceManagementPanel() {
     closeInstancePanel();
     openPanel(selectedInstance, selectedInstance._key);
   }, [selectedInstance, closeInstancePanel, openPanel]);
+
+  const handleToggleInstance = useCallback(async () => {
+    if (!selectedInstance?._key) return;
+    try {
+      await ConnectorsApi.toggleConnector(selectedInstance._key, 'sync');
+      // Refetch active connectors to update state
+      const scope = selectedInstance.scope === 'personal' ? 'personal' : 'team';
+      const activeRes = await ConnectorsApi.getActiveConnectors(scope as 'team' | 'personal');
+      setActiveConnectors(activeRes.connectors);
+      addToast({
+        variant: 'success',
+        title: selectedInstance.isActive
+          ? `${selectedInstance.name} has been disabled`
+          : `${selectedInstance.name} has been enabled`,
+        duration: 3000,
+      });
+    } catch {
+      addToast({
+        variant: 'error',
+        title: 'Failed to toggle instance',
+      });
+    }
+  }, [selectedInstance, setActiveConnectors, addToast]);
+
+  const handleDeleteInstance = useCallback(async () => {
+    if (!selectedInstance?._key) return;
+    try {
+      await ConnectorsApi.deleteConnectorInstance(selectedInstance._key);
+      addToast({
+        variant: 'success',
+        title: 'Connector instance deleted successfully',
+        duration: 3000,
+      });
+      closeInstancePanel();
+      // Refetch active connectors to update state
+      const scope = selectedInstance.scope === 'personal' ? 'personal' : 'team';
+      const activeRes = await ConnectorsApi.getActiveConnectors(scope as 'team' | 'personal');
+      setActiveConnectors(activeRes.connectors);
+    } catch {
+      addToast({
+        variant: 'error',
+        title: 'Failed to delete connector instance',
+      });
+      throw new Error('Delete failed');
+    }
+  }, [selectedInstance, closeInstancePanel, setActiveConnectors, addToast]);
 
   if (!selectedInstance) return null;
 
@@ -161,7 +211,12 @@ export function InstanceManagementPanel() {
             <OverviewTab instance={selectedInstance} stats={instanceStat} />
           </Tabs.Content>
           <Tabs.Content value="settings">
-            <SettingsTab instance={selectedInstance} config={instanceConfig} />
+            <SettingsTab
+              instance={selectedInstance}
+              config={instanceConfig}
+              onToggleInstance={handleToggleInstance}
+              onDeleteInstance={handleDeleteInstance}
+            />
           </Tabs.Content>
         </Tabs.Root>
 

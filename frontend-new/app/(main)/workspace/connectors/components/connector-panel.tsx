@@ -56,6 +56,8 @@ export function ConnectorPanel() {
     setAuthState,
     setShowConfigSuccessDialog,
     setNewlyConfiguredConnectorId,
+    setActiveConnectors,
+    setRegistryConnectors,
   } = useConnectorsStore();
 
   const isCreateMode = !panelConnectorId;
@@ -129,6 +131,15 @@ export function ConnectorPanel() {
           panelConnectorId: result._key || result.connectorId,
           isAuthTypeImmutable: true,
         });
+
+        // Refetch active connectors so the list is up-to-date
+        const scope = pathname.includes('/personal/') ? 'personal' : 'team';
+        try {
+          const activeRes = await ConnectorsApi.getActiveConnectors(scope as 'team' | 'personal');
+          setActiveConnectors(activeRes.connectors);
+        } catch {
+          // Silently fail
+        }
 
         // If NONE auth type, mark as authenticated
         if (isNoneAuthType(selectedAuthType)) {
@@ -223,6 +234,22 @@ export function ConnectorPanel() {
       // and show the success dialog
       const savedConnectorType = connectorType;
       const scope = pathname.includes('/personal/') ? 'personal' : 'team';
+
+      // Refetch active + registry connectors so both views are up-to-date
+      try {
+        const [activeRes, registryRes] = await Promise.allSettled([
+          ConnectorsApi.getActiveConnectors(scope as 'team' | 'personal'),
+          ConnectorsApi.getRegistryConnectors(scope as 'team' | 'personal'),
+        ]);
+        if (activeRes.status === 'fulfilled') {
+          setActiveConnectors(activeRes.value.connectors);
+        }
+        if (registryRes.status === 'fulfilled') {
+          setRegistryConnectors(registryRes.value.connectors);
+        }
+      } catch {
+        // Silently fail — data will refresh on next navigation
+      }
 
       // Close the configuration panel
       closePanel();

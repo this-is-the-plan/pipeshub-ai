@@ -1,10 +1,11 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { Flex, Text, Select } from '@radix-ui/themes';
 import { MaterialIcon } from '@/app/components/ui/MaterialIcon';
 import { SchemaFormField } from '../schema-form-field';
 import { useConnectorsStore } from '../../store';
+import { ConnectorsApi } from '../../api';
 import { isNoneAuthType, isOAuthType } from '../../utils/auth-helpers';
 import { DocumentationSection } from './documentation-section';
 import { OAuthSection } from './oauth-section';
@@ -18,6 +19,7 @@ import type { AuthCardState } from '../../types';
 export function AuthenticateTab() {
   const {
     connectorSchema,
+    connectorConfig,
     panelConnector,
     panelConnectorId,
     selectedAuthType,
@@ -40,6 +42,106 @@ export function AuthenticateTab() {
 
   // Resolve current auth schema fields based on selected auth type
   const currentSchemaFields = resolveAuthFields(authConfig, selectedAuthType);
+
+  return (
+    <AuthenticateTabInner
+      connectorSchema={connectorSchema}
+      connectorConfig={connectorConfig}
+      panelConnector={panelConnector}
+      panelConnectorId={panelConnectorId}
+      selectedAuthType={selectedAuthType}
+      isCreateMode={isCreateMode}
+      authConfig={authConfig}
+      supportedAuthTypes={supportedAuthTypes}
+      showAuthTypeSelector={showAuthTypeSelector}
+      currentSchemaFields={currentSchemaFields}
+      schema={schema}
+      formData={formData}
+      formErrors={formErrors}
+      conditionalDisplay={conditionalDisplay}
+      authState={authState}
+      setAuthFormValue={setAuthFormValue}
+      setSelectedAuthType={setSelectedAuthType}
+    />
+  );
+}
+
+/**
+ * Inner component that can use hooks unconditionally.
+ */
+function AuthenticateTabInner({
+  connectorSchema,
+  connectorConfig,
+  panelConnector,
+  panelConnectorId,
+  selectedAuthType,
+  isCreateMode,
+  authConfig,
+  supportedAuthTypes,
+  showAuthTypeSelector,
+  currentSchemaFields,
+  schema,
+  formData,
+  formErrors,
+  conditionalDisplay,
+  authState,
+  setAuthFormValue,
+  setSelectedAuthType,
+}: {
+  connectorSchema: NonNullable<ReturnType<typeof useConnectorsStore.getState>['connectorSchema']>;
+  connectorConfig: ReturnType<typeof useConnectorsStore.getState>['connectorConfig'];
+  panelConnector: NonNullable<ReturnType<typeof useConnectorsStore.getState>['panelConnector']>;
+  panelConnectorId: string | null;
+  selectedAuthType: string;
+  isCreateMode: boolean;
+  authConfig: typeof connectorSchema.auth;
+  supportedAuthTypes: string[];
+  showAuthTypeSelector: boolean;
+  currentSchemaFields: ReturnType<typeof resolveAuthFields>;
+  schema: typeof connectorSchema;
+  formData: ReturnType<typeof useConnectorsStore.getState>['formData'];
+  formErrors: ReturnType<typeof useConnectorsStore.getState>['formErrors'];
+  conditionalDisplay: ReturnType<typeof useConnectorsStore.getState>['conditionalDisplay'];
+  authState: ReturnType<typeof useConnectorsStore.getState>['authState'];
+  setAuthFormValue: (name: string, value: unknown) => void;
+  setSelectedAuthType: (authType: string) => void;
+}) {
+  // ── Auto-populate OAuth credentials from OAuth config ──
+  const oauthPopulatedRef = useRef(false);
+
+  const oauthFieldNames = useMemo(() => {
+    if (!isOAuthType(selectedAuthType) || !currentSchemaFields.length) return [];
+    return currentSchemaFields.map((f) => f.name);
+  }, [selectedAuthType, currentSchemaFields]);
+
+  useEffect(() => {
+    // Only populate once per panel open, only in edit mode with OAuth
+    if (isCreateMode || !isOAuthType(selectedAuthType) || oauthPopulatedRef.current) return;
+    if (oauthFieldNames.length === 0) return;
+
+    // Get oauthConfigId from the connector config
+    const configAuth = connectorConfig?.config?.auth;
+    const oauthConfigId = configAuth?.oauthConfigId as string | undefined;
+    if (!oauthConfigId || !panelConnector.type) return;
+
+    oauthPopulatedRef.current = true;
+
+    // Fetch the OAuth config and populate form fields
+    ConnectorsApi.getOAuthConfig(panelConnector.type, oauthConfigId)
+      .then((oauthConfig) => {
+        if (!oauthConfig) return;
+        const config = (oauthConfig.config ?? oauthConfig) as Record<string, unknown>;
+        for (const fieldName of oauthFieldNames) {
+          const value = config[fieldName];
+          if (value !== null && value !== undefined && value !== '') {
+            setAuthFormValue(fieldName, value);
+          }
+        }
+      })
+      .catch(() => {
+        // Silently fail — fields will remain empty
+      });
+  }, [isCreateMode, selectedAuthType, oauthFieldNames, connectorConfig, panelConnector.type, panelConnectorId, setAuthFormValue]);
 
   // Documentation links
   const docLinks = schema.documentationLinks ?? [];

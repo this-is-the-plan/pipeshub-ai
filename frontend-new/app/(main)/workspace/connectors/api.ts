@@ -149,6 +149,31 @@ export const ConnectorsApi = {
     return data;
   },
 
+  /** List OAuth configs for a connector type */
+  async listOAuthConfigs(
+    connectorType: string,
+    page = 1,
+    limit = 100,
+    search?: string
+  ): Promise<{ oauthConfigs: Array<Record<string, unknown>>; pagination: Record<string, unknown> }> {
+    const params: Record<string, unknown> = { page, limit };
+    if (search) params.search = search;
+    const { data } = await apiClient.get(`/api/v1/oauth/${connectorType}`, { params });
+    return {
+      oauthConfigs: data.oauthConfigs || [],
+      pagination: data.pagination || {},
+    };
+  },
+
+  /** Get a specific OAuth config by ID */
+  async getOAuthConfig(
+    connectorType: string,
+    oauthConfigId: string
+  ): Promise<Record<string, unknown>> {
+    const { data } = await apiClient.get(`/api/v1/oauth/${connectorType}/${oauthConfigId}`);
+    return data.oauthConfig;
+  },
+
   // ── Filter Options (dynamic) ──
 
   /** Fetch available filter options for a specific filter field */
